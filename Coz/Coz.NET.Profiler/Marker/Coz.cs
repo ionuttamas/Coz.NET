@@ -2,7 +2,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
-using Coz.NET.Profiler.Utils;
+using Coz.NET.Profiler.IPC;
+using Coz.NET.Profiler.Profile;
 
 namespace Coz.NET.Profiler.Marker
 {
@@ -11,19 +12,31 @@ namespace Coz.NET.Profiler.Marker
         private static readonly ConcurrentDictionary<string, long> Counters;
         private static readonly ConcurrentDictionary<string, LatencyMeasurement> Latencies;
         private static readonly ConcurrentBag<(string, LatencyMeasurement)> ProcessedLatencies;
+        private static readonly Experiment.Experiment Experiment;
+        private static readonly IPCService IpcService;
 
         static Coz()
         {
             Counters = new ConcurrentDictionary<string, long>();
             Latencies = new ConcurrentDictionary<string, LatencyMeasurement>();
             ProcessedLatencies = new ConcurrentBag<(string, LatencyMeasurement)>();
+            IpcService = new IPCService();
+            IpcService.Open();
+            Experiment = IpcService.Receive<Experiment.Experiment>();
             Process.GetCurrentProcess().Exited += Coz_Exited;
         }
 
         private static void Coz_Exited(object sender, EventArgs e)
         {
-            var throughputSnapshot = GetThroughputSnapshot();
-            var latencySnapshot = GetLatencySnapshot();
+            var throughput = GetThroughputSnapshot();
+            var latencies = GetLatenciesSnapshot();
+            var snapshot = new CozSnapshot
+            {
+                ExperimentId = Experiment.Id,
+                Throughput = throughput,
+                Latencies = latencies
+            };
+            IpcService.Send(snapshot);
         }
 
         public static void Throughput(string tag)
@@ -87,11 +100,11 @@ namespace Coz.NET.Profiler.Marker
             return string.Join(',', snapshot.Select(x => $"{x.Key}:{x.Value}"));
         }
 
-        public static string GetLatencySnapshot()
+        public static string GetLatenciesSnapshot()
         {
             var snapshot = ProcessedLatencies.ToArray().Where(x => x.Item2.IsFinished);
 
-            return string.Join(',', snapshot.Select(x => $"{x.Item1}:{x.Item2.GetDuration()}"));
+            return string.Join(',', snapshot.Select(x => $"{x.Item1}:{x.Item2.Duration}"));
         }
     }
 }

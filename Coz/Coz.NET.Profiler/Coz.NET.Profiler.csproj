@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Folder Include="Analysis\" />
+    <Folder Include="Utils\" />
   </ItemGroup>
 
 </Project>

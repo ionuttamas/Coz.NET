@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 
-namespace Coz.NET.Profiler.Utils
+namespace Coz.NET.Profiler.Profile
 {
     public class LatencyMeasurement
     {
@@ -13,6 +13,8 @@ namespace Coz.NET.Profiler.Utils
 
         public bool IsFinished => !stopwatch.IsRunning;
 
+        public long Duration => stopwatch.ElapsedTicks;
+
         public void Start() 
         {
             stopwatch.Start();
@@ -22,10 +24,5 @@ namespace Coz.NET.Profiler.Utils
         {
             stopwatch.Stop();
         }
-
-        public long GetDuration()
-        {
-            return stopwatch.ElapsedTicks;
-        } 
     }
 }

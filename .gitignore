@@ -10,3 +10,6 @@ TestApp2/
 TestApp/TestApp/bin/
 TestApp/.vs/
 Coz/Coz.NET.CodeProcessor/bin/
+Coz/Coz.NET.Agent/bin/
+Coz/.vs/
+Coz/Coz.NET.Profiler/bin/

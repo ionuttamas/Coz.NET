@@ -3,11 +3,11 @@ using System.IO;
 using System.IO.MemoryMappedFiles;
 using Coz.NET.Profiler.Experiment;
 
-namespace Coz.NET.Profiler.Utils
+namespace Coz.NET.Profiler.IPC
 {
     public class IPCService
     {
-        private const long MAX_MESSAGE_CAPACITY = 10000;
+        private const long MAX_MESSAGE_CAPACITY = 1000000;
         private const string MEMORY_MAPPED_FILE = "COZ_MMF";
         private MemoryMappedFile channel;
 

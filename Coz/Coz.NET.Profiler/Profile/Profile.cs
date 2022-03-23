@@ -2,21 +2,35 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Threading;
-using Coz.NET.Profiler.Utils;
+using Coz.NET.Profiler.IPC;
 
-namespace Coz.NET.Profiler.Experiment
+namespace Coz.NET.Profiler.Profile
 {
-    public static class ProfileMeasurement
+    public static class Profile
     {
         private static long currentCallId;
         private static readonly ConcurrentDictionary<string, LatencyMeasurement> MethodLatencies;
         private static readonly ConcurrentBag<(string, LatencyMeasurement)> ProcessedLatencies;
 
-        static ProfileMeasurement()
+        static Profile()
         {
             MethodLatencies = new ConcurrentDictionary<string, LatencyMeasurement>();
             ProcessedLatencies = new ConcurrentBag<(string, LatencyMeasurement)>();
             currentCallId = long.MinValue;
+
+            var ipcService = new IPCService();
+            ipcService.Open();
+            Experiment = ipcService.Receive<Experiment.Experiment>();
+        } 
+
+        public static Experiment.Experiment Experiment { get; }
+
+        public static void Slowdown([CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
+        {
+            if (callerFilePath == Experiment.FilePath && callerMember == Experiment.MethodName && callerLineNumber == Experiment.LineNumber)
+            {
+                Thread.Sleep(Experiment.MethodSlowdown);
+            }
         }
 
         public static long StartRecord([CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
