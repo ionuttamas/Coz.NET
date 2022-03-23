@@ -5,12 +5,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="protobuf-net" Version="3.0.101" />
+    <Compile Remove="Utils\**" />
+    <EmbeddedResource Remove="Utils\**" />
+    <None Remove="Utils\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Analysis\" />
-    <Folder Include="Utils\" />
+    <PackageReference Include="protobuf-net" Version="3.0.101" />
   </ItemGroup>
 
 </Project>

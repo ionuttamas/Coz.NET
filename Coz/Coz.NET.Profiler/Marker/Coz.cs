@@ -23,20 +23,7 @@ namespace Coz.NET.Profiler.Marker
             IpcService = new IPCService();
             IpcService.Open();
             Experiment = IpcService.Receive<Experiment.Experiment>();
-            Process.GetCurrentProcess().Exited += Coz_Exited;
-        }
-
-        private static void Coz_Exited(object sender, EventArgs e)
-        {
-            var throughput = GetThroughputSnapshot();
-            var latencies = GetLatenciesSnapshot();
-            var snapshot = new CozSnapshot
-            {
-                ExperimentId = Experiment.Id,
-                Throughput = throughput,
-                Latencies = latencies
-            };
-            IpcService.Send(snapshot);
+            Process.GetCurrentProcess().Exited += OnExited;
         }
 
         public static void Throughput(string tag)
@@ -94,7 +81,7 @@ namespace Coz.NET.Profiler.Marker
         }
 
         public static string GetThroughputSnapshot()
-        {
+        {   
             var snapshot = Counters.ToArray();
 
             return string.Join(',', snapshot.Select(x => $"{x.Key}:{x.Value}"));
@@ -105,6 +92,19 @@ namespace Coz.NET.Profiler.Marker
             var snapshot = ProcessedLatencies.ToArray().Where(x => x.Item2.IsFinished);
 
             return string.Join(',', snapshot.Select(x => $"{x.Item1}:{x.Item2.Duration}"));
+        }
+
+        private static void OnExited(object sender, EventArgs e)
+        {
+            var throughput = GetThroughputSnapshot();
+            var latencies = GetLatenciesSnapshot();
+            var snapshot = new CozSnapshot
+            {
+                ExperimentId = Experiment.Id,
+                Throughput = throughput,
+                Latencies = latencies
+            };
+            IpcService.Send(snapshot);
         }
     }
 }

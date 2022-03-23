@@ -24,7 +24,7 @@ namespace Coz.NET.Profiler.Marker
             {
                 Serializer.SerializeWithLengthPrefix(stream, this, PrefixStyle.Fixed32);
                 data = stream.ToArray();
-            }
+            }   
 
             return data;
         }

@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using ProtoBuf;
 
 namespace Coz.NET.Profiler.Experiment
@@ -8,29 +9,21 @@ namespace Coz.NET.Profiler.Experiment
     {
         public Experiment() { }
 
-        public Experiment(string id, string filePath, string methodName, long lineNumber, int slowdown)
+        public Experiment(string id, string methodId, int methodSlowdown)
         {
             Id = id;
-            FilePath = filePath;
-            MethodName = methodName;
-            LineNumber = lineNumber;
             //At the moment we only have millisecond thread sleep granularity
-            MethodSlowdown = slowdown;
+            MethodId = methodId;
+            MethodSlowdown = methodSlowdown;
         }
 
         [ProtoMember(1)]
         public string Id { get; set; }
-
+        
         [ProtoMember(2)]
-        public string FilePath { get; set; }
-        
+        public string MethodId { get; set; }
+
         [ProtoMember(3)]
-        public string MethodName { get; set; }
-        
-        [ProtoMember(4)]
-        public long LineNumber { get; set; }
-        
-        [ProtoMember(5)]
         public int MethodSlowdown { get; set; }
 
         public byte[] Serialize()
@@ -49,9 +42,7 @@ namespace Coz.NET.Profiler.Experiment
         public void Deserialize(Stream stream)
         {
             Experiment instance = Serializer.DeserializeWithLengthPrefix<Experiment>(stream, PrefixStyle.Fixed32);
-            FilePath = instance.FilePath;
-            MethodName = instance.MethodName;
-            LineNumber = instance.LineNumber;
+            MethodId = instance.MethodId;
             MethodSlowdown = instance.MethodSlowdown;
         }
     }

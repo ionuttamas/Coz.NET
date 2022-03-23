@@ -9,11 +9,6 @@ namespace Coz.NET.CodeProcessor.Rewriter
 {
     public class MethodVirtualSpeedupRewriter : CSharpSyntaxRewriter
     {
-        public MethodVirtualSpeedupRewriter()
-        {
-
-        }
-
         public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
         {
             var statement = SyntaxFactory.ParseStatement(@"Console.WriteLine(""Injected"");" + Environment.NewLine);
