@@ -13,4 +13,8 @@
     <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.2.0-1.final" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Coz.NET.CodeProcessor\Coz.NET.CodeProcessor.csproj" />
+  </ItemGroup>
+
 </Project>

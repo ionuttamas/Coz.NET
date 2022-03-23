@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
+using Coz.NET.CodeProcessor.Rewriter;
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -65,7 +66,7 @@ namespace Coz
             }
         }
 
-        public class MethodVirtualSpeedupRewriter : CSharpSyntaxRewriter
+        public class MethodVirtualSpeedupRewriter2 : CSharpSyntaxRewriter
         {
             public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
             {
