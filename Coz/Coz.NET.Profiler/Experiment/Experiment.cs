@@ -24,6 +24,9 @@ namespace Coz.NET.Profiler.Experiment
         public string MethodId { get; set; }
 
         [ProtoMember(3)]
+        public float MethodPercentageSlowdown { get; set; }
+
+        [ProtoMember(4)]
         public int MethodSlowdown { get; set; }
 
         public byte[] Serialize()
@@ -42,6 +45,7 @@ namespace Coz.NET.Profiler.Experiment
         public void Deserialize(Stream stream)
         {
             Experiment instance = Serializer.DeserializeWithLengthPrefix<Experiment>(stream, PrefixStyle.Fixed32);
+            Id = instance.Id;
             MethodId = instance.MethodId;
             MethodSlowdown = instance.MethodSlowdown;
         }

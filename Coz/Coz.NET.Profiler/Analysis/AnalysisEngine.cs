@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using Coz.NET.Profiler.IPC;
@@ -10,41 +12,38 @@ namespace Coz.NET.Profiler.Analysis
 {
     public class AnalysisEngine
     {
-        private readonly IPCService ipcService;
-        private readonly List<ProfileMeasurement> profileMeasurements;
-        private readonly List<CozSnapshot> cozSnapshots;
+        private readonly IPCService ipcService; 
 
         public AnalysisEngine()
-        {
-            profileMeasurements = new List<ProfileMeasurement>();
-            cozSnapshots = new List<CozSnapshot>();
+        { 
             ipcService = new IPCService();
         }
 
         public void Start()
         {
-            ipcService.Open();
+            ipcService.Start();
         }
 
         public void Stop()
         {
-            ipcService.Close();
+            ipcService.Stop();
         }
 
-        public void Analyze(AnalysisConfig config)
+        public AnalysisReport Analyze(AnalysisConfig config)
         {
-            ExecuteBaselineRuns(config);
-            List<Experiment.Experiment> experiments = ScheduleExperiments(config);
-            ExecuteExperimentalRuns(config, experiments);
+            List<ProfileMeasurement> baselineMeasurements = ExecuteBaselineRuns(config);
+            BaselineSummary baselineSummary = ComputeBaselineSummary(config, baselineMeasurements);
+            List<Experiment.Experiment> experiments = ScheduleExperiments(config, baselineSummary);
+            List<CozSnapshot> cozSnapshots = ExecuteExperimentalRuns(config, experiments);
+            AnalysisReport report = GenerateReport(experiments, baselineSummary, cozSnapshots);
+
+            return report;
         }
 
-        public AnalysisReport GenerateReport()
+        private List<ProfileMeasurement> ExecuteBaselineRuns(AnalysisConfig config)
         {
-            return null;
-        }
+            var baselineMeasurements = new List<ProfileMeasurement>();
 
-        private void ExecuteBaselineRuns(AnalysisConfig config)
-        {
             for (int i = 0; i < config.BaselineRuns; i++)
             {
                 var experiment = new Experiment.Experiment
@@ -54,27 +53,21 @@ namespace Coz.NET.Profiler.Analysis
                 ipcService.Send(experiment); 
                 StartProcess(config.ExecutablePath, config.Arguments);
                 var profileMeasurement = ipcService.Receive<ProfileMeasurement>();
-                profileMeasurements.Add(profileMeasurement);
+                baselineMeasurements.Add(profileMeasurement);
             }
+
+            return baselineMeasurements;
         }
 
-        private List<Experiment.Experiment> ScheduleExperiments(AnalysisConfig config)
+        private List<Experiment.Experiment> ScheduleExperiments(AnalysisConfig config, BaselineSummary baselineSummary)
         {
-            var averageMethodDurations = profileMeasurements
-                .SelectMany(x => x.MethodMeasurements)
-                .ToDictionary(x => x.MethodId, x => x.Latencies.Average());
-            var apportionedTotalDuration = averageMethodDurations.Values.Sum();
-            averageMethodDurations = averageMethodDurations
-                .Where(x => x.Value / apportionedTotalDuration > config.CutoffPercentage)
-                .ToDictionary(x => x.Key, x => x.Value);
-
             var experiments = new List<Experiment.Experiment>();
 
             foreach (float percentageSpeedup in config.PercentageSpeedups)
             {
-                foreach (string methodId in averageMethodDurations.Keys)
+                foreach (string methodId in baselineSummary.MethodsLatencies.Keys)
                 {
-                    var duration = averageMethodDurations[methodId];
+                    var duration = baselineSummary.MethodsLatencies[methodId];
                     var percentageSlowdown = percentageSpeedup / (1 - percentageSpeedup);
                     var slowdown = (int)(percentageSlowdown * duration);
 
@@ -88,9 +81,9 @@ namespace Coz.NET.Profiler.Analysis
                     {
                         Id = Guid.NewGuid().ToString(),
                         MethodId = methodId,
+                        MethodPercentageSlowdown = percentageSlowdown,
                         MethodSlowdown = slowdown
                     };
-
                     experiments.Add(experiment);
                 }
             }
@@ -98,33 +91,140 @@ namespace Coz.NET.Profiler.Analysis
             return experiments;
         }
 
-        private void ExecuteExperimentalRuns(AnalysisConfig config, List<Experiment.Experiment> experiments)
+        private List<CozSnapshot> ExecuteExperimentalRuns(AnalysisConfig config, List<Experiment.Experiment> experiments)
         {
+            var cozSnapshots = new List<CozSnapshot>();
+
             foreach (var experiment in experiments)
             {
                 ipcService.Send(experiment);
+                var stopwatch = new Stopwatch();
+                stopwatch.Start();
                 StartProcess(config.ExecutablePath, config.Arguments);
+                stopwatch.Stop();
                 var cozSnapshot = ipcService.Receive<CozSnapshot>();
+                cozSnapshot.Throughputs = cozSnapshot.Throughputs.Select(x => x / stopwatch.ElapsedTicks).ToList();
                 cozSnapshots.Add(cozSnapshot);
             }
+
+            return cozSnapshots;
+        }
+
+        private BaselineSummary ComputeBaselineSummary(AnalysisConfig config, List<ProfileMeasurement> baselineMeasurements)
+        {
+            //TODO: can change this to other aggregation than average
+            var methodLatencies = baselineMeasurements
+                .SelectMany(x => x.MethodMeasurements)
+                .ToDictionary(x => x.MethodId, x => x.Latencies.Average());
+            var apportionedTotalDuration = methodLatencies.Values.Sum();
+            //TODO: this is inclusive, but needs to be exclusive
+            methodLatencies = methodLatencies
+                .Where(x => x.Value / apportionedTotalDuration > config.CutoffPercentage)
+                .ToDictionary(x => x.Key, x => x.Value);
+            var baselineSummary = new BaselineSummary();
+            var cozLatencies = baselineMeasurements
+                .Select(x => FlattenLatencies(x.CozSnapshot))
+                .SelectMany(x=>x)
+                .GroupBy(x=>x.Key)
+                .ToDictionary(x=>x.Key, x=>x.SelectMany(m=>m.Value).Average());
+
+            var cozThroughputs = baselineMeasurements
+                .Select(x => FlattenThroughputs(x.CozSnapshot))
+                .SelectMany(x => x)
+                .GroupBy(x => x.Key)
+                .ToDictionary(x => x.Key, x => x.SelectMany(m => m.Value).Average()); 
+
+            baselineSummary.MethodsLatencies = methodLatencies;
+            baselineSummary.CozLatencies = cozLatencies;
+            baselineSummary.CozThrougputs = cozThroughputs;
+
+            return baselineSummary;
+        }
+
+        private AnalysisReport GenerateReport(List<Experiment.Experiment> experiments, BaselineSummary baselineSummary, List<CozSnapshot> cozSnapshots)
+        {
+            var methodSpeedups = new List<MethodSpeedup>();
+
+            foreach (Experiment.Experiment experiment in experiments)
+            {
+                var cozSnapshot = cozSnapshots.First(x => x.ExperimentId == experiment.Id);
+                var methodPercentageSpeedup = 1 - experiment.MethodPercentageSlowdown;
+                var latencyPercentageSpeedups = new Dictionary<string, double>();
+                var throughputPercentageSpeedups = new Dictionary<string, double>();
+
+                for (int i = 0; i < cozSnapshot.LatencyTags.Count; i++)
+                {
+                    var latencyTag = cozSnapshot.LatencyTags[i];
+                    latencyPercentageSpeedups[latencyTag] =
+                        1 - cozSnapshot.Latencies[i] / baselineSummary.CozLatencies[latencyTag];
+                }
+
+                for (int i = 0; i < cozSnapshot.ThroughputTags.Count; i++)
+                {
+                    var throughputTag = cozSnapshot.ThroughputTags[i];
+                    throughputPercentageSpeedups[throughputTag] =
+                        1 - cozSnapshot.Throughputs[i] / baselineSummary.CozThrougputs[throughputTag];
+                }
+
+                var methodSpeedup = new MethodSpeedup
+                {
+                    MethodId = experiment.MethodId,
+                    PercentageSpeedup = methodPercentageSpeedup,
+                    LatencySpeedups = latencyPercentageSpeedups,
+                    ThroughputSpeedups = throughputPercentageSpeedups
+                };
+                methodSpeedups.Add(methodSpeedup);
+            }
+
+            return new AnalysisReport(methodSpeedups);
+        }
+
+        private Dictionary<string, List<long>> FlattenLatencies(CozSnapshot snapshot)
+        {
+            var latencies = Enumerable.Range(0, snapshot.Latencies.Count)
+                .Select(ix=>(snapshot.LatencyTags[ix], snapshot.Latencies[ix]))
+                .GroupBy(x => x.Item1)
+                .Select(x => (x.Key, x.Select(m => m.Item2).ToList()))
+                .ToDictionary(x=>x.Key, x=>x.Item2.ToList());
+
+            return latencies;
+        }
+
+        private Dictionary<string, List<double>> FlattenThroughputs(CozSnapshot snapshot)
+        {
+            var throughputs = Enumerable.Range(0, snapshot.Throughputs.Count)
+                .Select(ix => (snapshot.ThroughputTags[ix], snapshot.Throughputs[ix]))
+                .GroupBy(x => x.Item1)
+                .Select(x => (x.Key, x.Select(m => m.Item2).ToList()))
+                .ToDictionary(x => x.Key, x => x.Item2.ToList());
+
+            return throughputs;
         }
 
         private static void StartProcess(string executablePath, string arguments)
         {
-            var process = new System.Diagnostics.Process
+            var process = new Process
             {
                 StartInfo =
                 {
+                    WorkingDirectory = Path.GetDirectoryName(executablePath),
                     FileName = executablePath,
                     Arguments = arguments,
                     RedirectStandardOutput = false,
-                    UseShellExecute = false,
+                    UseShellExecute = true,
                     CreateNoWindow = true
                 }
             };
             process.Start();
             process.WaitForExit();
         } 
+
+        private class BaselineSummary
+        {
+            public Dictionary<string, double> MethodsLatencies { get; set; }
+            public Dictionary<string, double> CozLatencies { get; set; }
+            public Dictionary<string, double> CozThrougputs { get; set; }
+        }
     }
 
 

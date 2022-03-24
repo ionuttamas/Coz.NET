@@ -13,3 +13,7 @@ Coz/Coz.NET.CodeProcessor/bin/
 Coz/Coz.NET.Agent/bin/
 Coz/.vs/
 Coz/Coz.NET.Profiler/bin/
+SampleApp.Latency/.vs/
+SampleApp.Throughput/SampleApp.Throughput/.vs/
+Temp_SampleApp.Latency/
+SampleApp.Throughput/.vs/

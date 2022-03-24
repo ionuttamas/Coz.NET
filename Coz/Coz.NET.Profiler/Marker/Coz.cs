@@ -1,13 +1,13 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Diagnostics;
+using System.Collections.Generic;
 using System.Linq;
 using Coz.NET.Profiler.IPC;
 using Coz.NET.Profiler.Profile;
 
 namespace Coz.NET.Profiler.Marker
 {
-    public static class Coz
+    public static class CozMarker
     {
         private static readonly ConcurrentDictionary<string, long> Counters;
         private static readonly ConcurrentDictionary<string, LatencyMeasurement> Latencies;
@@ -15,15 +15,15 @@ namespace Coz.NET.Profiler.Marker
         private static readonly Experiment.Experiment Experiment;
         private static readonly IPCService IpcService;
 
-        static Coz()
+        static CozMarker()
         {
             Counters = new ConcurrentDictionary<string, long>();
             Latencies = new ConcurrentDictionary<string, LatencyMeasurement>();
             ProcessedLatencies = new ConcurrentBag<(string, LatencyMeasurement)>();
             IpcService = new IPCService();
-            IpcService.Open();
-            Experiment = IpcService.Receive<Experiment.Experiment>();
-            Process.GetCurrentProcess().Exited += OnExited;
+            IpcService.Start();
+            Experiment = IpcService.Receive<Experiment.Experiment>(); 
+            AppDomain.CurrentDomain.ProcessExit += OnExited;
         }
 
         public static void Throughput(string tag)
@@ -80,29 +80,31 @@ namespace Coz.NET.Profiler.Marker
             ProcessedLatencies.Add((tag, latency));
         }
 
-        public static string GetThroughputSnapshot()
+        public static (List<string>, List<double>) GetThroughputSnapshot()
         {   
             var snapshot = Counters.ToArray();
 
-            return string.Join(',', snapshot.Select(x => $"{x.Key}:{x.Value}"));
+            return (snapshot.Select(x => x.Key).ToList(), snapshot.Select(x => (double)x.Value).ToList());
         }
 
-        public static string GetLatenciesSnapshot()
+        public static (List<string>, List<long>) GetLatenciesSnapshot()
         {
-            var snapshot = ProcessedLatencies.ToArray().Where(x => x.Item2.IsFinished);
+            var snapshot = ProcessedLatencies.ToArray().Where(x => x.Item2.IsFinished).ToList();
 
-            return string.Join(',', snapshot.Select(x => $"{x.Item1}:{x.Item2.Duration}"));
+            return (snapshot.Select(x => x.Item1).ToList(), snapshot.Select(x => x.Item2.Duration).ToList());
         }
 
         private static void OnExited(object sender, EventArgs e)
         {
-            var throughput = GetThroughputSnapshot();
-            var latencies = GetLatenciesSnapshot();
+            var (throughputTags, throughputs) = GetThroughputSnapshot();
+            var (latencyTags, latencies) = GetLatenciesSnapshot();
             var snapshot = new CozSnapshot
             {
                 ExperimentId = Experiment.Id,
-                Throughput = throughput,
-                Latencies = latencies
+                ThroughputTags = throughputTags,
+                Throughputs = throughputs,
+                LatencyTags = latencyTags,
+                Latencies = latencies,
             };
             IpcService.Send(snapshot);
         }

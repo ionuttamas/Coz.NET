@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using Coz.NET.Profiler.Experiment;
 using ProtoBuf;
 
@@ -11,10 +12,16 @@ namespace Coz.NET.Profiler.Marker
         public string ExperimentId { get; set; }
 
         [ProtoMember(2)]
-        public string Latencies { get; set; }
+        public List<string> LatencyTags { get; set; }
 
         [ProtoMember(3)]
-        public string Throughput { get; set; }
+        public List<long> Latencies { get; set; }
+
+        [ProtoMember(4)]
+        public List<string> ThroughputTags { get; set; }
+
+        [ProtoMember(5)]
+        public List<double> Throughputs { get; set; }
 
         public byte[] Serialize()
         {
@@ -33,8 +40,10 @@ namespace Coz.NET.Profiler.Marker
         {
             CozSnapshot instance = Serializer.DeserializeWithLengthPrefix<CozSnapshot>(stream, PrefixStyle.Fixed32);
             ExperimentId = instance.ExperimentId;
+            LatencyTags = instance.LatencyTags;
             Latencies = instance.Latencies;
-            Throughput = instance.Throughput;
+            ThroughputTags = instance.ThroughputTags;
+            Throughputs = instance.Throughputs;
         }
     }
 }

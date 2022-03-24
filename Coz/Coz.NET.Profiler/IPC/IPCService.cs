@@ -11,41 +11,49 @@ namespace Coz.NET.Profiler.IPC
         private const string MEMORY_MAPPED_FILE = "COZ_MMF";
         private MemoryMappedFile channel;
 
-        public void Open()
+        public void Start()
         {
-            channel = MemoryMappedFile.CreateOrOpen(MEMORY_MAPPED_FILE, MAX_MESSAGE_CAPACITY);
+            //channel = MemoryMappedFile.CreateOrOpen(MEMORY_MAPPED_FILE, MAX_MESSAGE_CAPACITY);
         }
 
-        public void Close()
+        public void Stop()
         {
-            channel.Dispose();
+            //channel.Dispose();
         }
 
         public void Send<T>(T message) where T : IProtoSerializable, new()
         {
-            using (var stream = channel.CreateViewStream())
-            {
-                var data = message.Serialize();
+            var data = message.Serialize();
+            File.WriteAllBytes(@"C:\Users\tamas\Documents\Coz.NET\data.txt", data);
 
-                if (data.Length > MAX_MESSAGE_CAPACITY)
-                    throw new InvalidOperationException(
-                        $"Transmitted message {message} exceeds limit of {MAX_MESSAGE_CAPACITY} bytes");
-
-                stream.Seek(0, SeekOrigin.Begin);
-                stream.Write(data);
-                stream.Flush();
-            }
+            //using (var stream = channel.CreateViewStream())
+            //{
+            //    var data = message.Serialize();
+            //
+            //    if (data.Length > MAX_MESSAGE_CAPACITY)
+            //        throw new InvalidOperationException(
+            //            $"Transmitted message {message} exceeds limit of {MAX_MESSAGE_CAPACITY} bytes");
+            //
+            //    stream.Seek(0, SeekOrigin.Begin);
+            //    stream.Write(data);
+            //    stream.Flush();
+            //}
         }
 
         public T Receive<T>() where T : IProtoSerializable, new()
         {
             var instance = new T();
 
-            using (var stream = channel.CreateViewStream())
+            using (var stream = new FileStream(@"C:\Users\tamas\Documents\Coz.NET\data.txt", FileMode.Open))
             {
                 instance.Deserialize(stream);
-                stream.Seek(0, SeekOrigin.Begin);
             }
+
+            //using (var stream = channel.CreateViewStream())
+            //{
+            //    instance.Deserialize(stream);
+            //    stream.Seek(0, SeekOrigin.Begin);
+            //}
 
             return instance;
         }

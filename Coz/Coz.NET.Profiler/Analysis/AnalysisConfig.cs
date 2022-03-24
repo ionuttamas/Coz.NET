@@ -10,15 +10,4 @@ namespace Coz.NET.Profiler.Analysis
         public string ExecutablePath { get; set; }
         public string Arguments { get; set; }
     }
-
-    public class AnalysisReport
-    {
-        public List<MethodReport> MethodReports { get; set; }
-    }
-
-    public class MethodReport
-    {
-        public string MethodId { get; set; }
-        public string PercentageSpeedup { get; set; }
-    }
 }

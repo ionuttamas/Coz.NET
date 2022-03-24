@@ -6,8 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Coz.NET.CodeProcessor\Coz.NET.CodeProcessor.csproj" />
-    <ProjectReference Include="..\Coz.NET.Profiler\Coz.NET.Profiler.csproj" />
+    <Reference Include="Coz.NET.Profiler">
+      <HintPath>..\..\Coz\Coz.NET.Profiler\bin\Debug\netcoreapp3.1\Coz.NET.Profiler.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

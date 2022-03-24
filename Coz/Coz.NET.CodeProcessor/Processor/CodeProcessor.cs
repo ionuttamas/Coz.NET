@@ -1,5 +1,6 @@
 ﻿using System.IO; 
 using Coz.NET.CodeProcessor.Rewriter;
+using Coz.NET.Profiler.Profile;
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis; 
 using Microsoft.CodeAnalysis.Formatting;
@@ -8,15 +9,18 @@ using Microsoft.CodeAnalysis.MSBuild;
 namespace Coz.NET.CodeProcessor.Processor
 {
     public class CodeProcessor
-    {
-        public void RegenerateSolution(string existingFolder, string copiedFolder, string solutionFile)
+    { 
+        public void RegenerateSolution(CodeLocation codeLocation)
         {
-            MSBuildLocator.RegisterDefaults();
+            if (!MSBuildLocator.IsRegistered)
+            {
+                MSBuildLocator.RegisterDefaults();
+            }
+
             var workspace = MSBuildWorkspace.Create();
-            CopyFilesRecursively(existingFolder, copiedFolder);
-            var copiedSolutionPath = Path.Combine(copiedFolder, solutionFile);
+            CopyFilesRecursively(codeLocation.SolutionFolder, codeLocation.GeneratedSolutionFolder);
             var rewriter = new MethodVirtualSpeedupRewriter();
-            var solution = workspace.OpenSolutionAsync(copiedSolutionPath).Result;
+            var solution = workspace.OpenSolutionAsync(codeLocation.GeneratedSolutionPath).Result;
 
             foreach (ProjectId projectId in solution.GetProjectDependencyGraph().GetTopologicallySortedProjects())
             {
@@ -36,17 +40,26 @@ namespace Coz.NET.CodeProcessor.Processor
             }
         }
 
-        public void BuildProjects(string solutionPath)
+        public void BuildProjects(CodeLocation codeLocation)
         {
-            MSBuildLocator.RegisterDefaults();
+            if (!MSBuildLocator.IsRegistered)
+            {
+                MSBuildLocator.RegisterDefaults();
+            }
+
             var workspace = MSBuildWorkspace.Create(); 
-            var solution = workspace.OpenSolutionAsync(solutionPath).Result;
+            var solution = workspace.OpenSolutionAsync(codeLocation.GeneratedSolutionPath).Result;
 
             foreach (ProjectId projectId in solution.GetProjectDependencyGraph().GetTopologicallySortedProjects())
             {
                 var project = solution.GetProject(projectId);
+                
+                if(!project.SupportsCompilation)
+                    continue;
+
                 var compilation = project.GetCompilationAsync().Result;
-                compilation.Emit(project.CompilationOutputInfo.AssemblyPath);
+                compilation = compilation.AddReferences(MetadataReference.CreateFromFile(typeof(ProfileMarker).Assembly.Location));
+                compilation.Emit(project.CompilationOutputInfo.AssemblyPath.Replace(codeLocation.SolutionFolder, codeLocation.GeneratedSolutionFolder));
             }
         }
 
@@ -67,5 +80,13 @@ namespace Coz.NET.CodeProcessor.Processor
                 File.Copy(newPath, newPath.Replace(sourcePath, targetPath), true);
             }
         }
+    }
+
+    public class CodeLocation
+    {
+        public string SolutionFolder { get; set; }
+        public string GeneratedSolutionFolder { get; set; }
+        public string SolutionFilename { get; set; }
+        public string GeneratedSolutionPath => Path.Combine(GeneratedSolutionFolder, SolutionFilename);
     }
 }

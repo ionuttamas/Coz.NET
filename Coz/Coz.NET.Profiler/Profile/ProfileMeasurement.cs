@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using Coz.NET.Profiler.Experiment;
+using Coz.NET.Profiler.Marker;
 using ProtoBuf;
 
 namespace Coz.NET.Profiler.Profile
@@ -10,6 +11,9 @@ namespace Coz.NET.Profiler.Profile
     {
         [ProtoMember(1)]
         public List<MethodMeasurement> MethodMeasurements { get; set; }
+
+        [ProtoMember(2)]
+        public CozSnapshot CozSnapshot { get; set; }
 
         public byte[] Serialize()
         {
@@ -28,6 +32,7 @@ namespace Coz.NET.Profiler.Profile
         {
             ProfileMeasurement instance = Serializer.DeserializeWithLengthPrefix<ProfileMeasurement>(stream, PrefixStyle.Fixed32);
             MethodMeasurements = instance.MethodMeasurements;
+            CozSnapshot = instance.CozSnapshot;
         }
     }
 }
