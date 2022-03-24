@@ -8,6 +8,14 @@ namespace Coz.NET.Profiler.Marker
     [ProtoContract]
     public class CozSnapshot : IProtoSerializable
     {
+        public CozSnapshot()
+        {
+            LatencyTags = new List<string>();
+            Latencies = new List<long>();
+            ThroughputTags = new List<string>();
+            Throughputs = new List<double>();
+        }
+
         [ProtoMember(1)]
         public string ExperimentId { get; set; }
 

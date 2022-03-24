@@ -12,12 +12,12 @@ namespace SampleApp
 
         private void Step1()
         {
-            Thread.Sleep(4000);
+            Thread.Sleep(400);
         }
 
         private void Step2()
         {
-            Thread.Sleep(1000);
+            Thread.Sleep(100);
         }
     }
 }

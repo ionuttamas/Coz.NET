@@ -67,13 +67,16 @@ namespace Coz.NET.Profiler.Analysis
             {
                 foreach (string methodId in baselineSummary.MethodsLatencies.Keys)
                 {
+                    if(config.ExcludedMethodIds.Contains(methodId))
+                        continue;
+
                     var duration = baselineSummary.MethodsLatencies[methodId];
                     var percentageSlowdown = percentageSpeedup / (1 - percentageSpeedup);
                     var slowdown = (int)(percentageSlowdown * duration);
 
                     if (slowdown == 0)
                     {
-                        Console.WriteLine("WARN: Experiment for method was dropped");
+                        Console.WriteLine($"WARN: Experiment for [methodId: {methodId}] was dropped");
                         continue;
                     }
 
@@ -103,7 +106,7 @@ namespace Coz.NET.Profiler.Analysis
                 StartProcess(config.ExecutablePath, config.Arguments);
                 stopwatch.Stop();
                 var cozSnapshot = ipcService.Receive<CozSnapshot>();
-                cozSnapshot.Throughputs = cozSnapshot.Throughputs.Select(x => x / stopwatch.ElapsedTicks).ToList();
+                cozSnapshot.Throughputs = cozSnapshot.Throughputs.Select(x => x / stopwatch.ElapsedMilliseconds).ToList();
                 cozSnapshots.Add(cozSnapshot);
             }
 
@@ -112,22 +115,20 @@ namespace Coz.NET.Profiler.Analysis
 
         private BaselineSummary ComputeBaselineSummary(AnalysisConfig config, List<ProfileMeasurement> baselineMeasurements)
         {
-            //TODO: can change this to other aggregation than average
             var methodLatencies = baselineMeasurements
                 .SelectMany(x => x.MethodMeasurements)
-                .ToDictionary(x => x.MethodId, x => x.Latencies.Average());
-            var apportionedTotalDuration = methodLatencies.Values.Sum();
-            //TODO: this is inclusive, but needs to be exclusive
-            methodLatencies = methodLatencies
-                .Where(x => x.Value / apportionedTotalDuration > config.CutoffPercentage)
-                .ToDictionary(x => x.Key, x => x.Value);
+                .GroupBy(x=>x.MethodId)
+                .ToDictionary(x => x.Key, x => x.SelectMany(m=>m.Latencies).Average());
+            var apportionedTotalDuration = methodLatencies.Values.Sum(); 
+            //methodLatencies = methodLatencies
+            //    .Where(x => x.Value / apportionedTotalDuration > config.CutoffPercentage)
+            //    .ToDictionary(x => x.Key, x => x.Value);
             var baselineSummary = new BaselineSummary();
             var cozLatencies = baselineMeasurements
                 .Select(x => FlattenLatencies(x.CozSnapshot))
                 .SelectMany(x=>x)
                 .GroupBy(x=>x.Key)
                 .ToDictionary(x=>x.Key, x=>x.SelectMany(m=>m.Value).Average());
-
             var cozThroughputs = baselineMeasurements
                 .Select(x => FlattenThroughputs(x.CozSnapshot))
                 .SelectMany(x => x)
@@ -148,22 +149,20 @@ namespace Coz.NET.Profiler.Analysis
             foreach (Experiment.Experiment experiment in experiments)
             {
                 var cozSnapshot = cozSnapshots.First(x => x.ExperimentId == experiment.Id);
-                var methodPercentageSpeedup = 1 - experiment.MethodPercentageSlowdown;
+                var methodPercentageSpeedup = experiment.MethodPercentageSlowdown/(1 + experiment.MethodPercentageSlowdown);
                 var latencyPercentageSpeedups = new Dictionary<string, double>();
                 var throughputPercentageSpeedups = new Dictionary<string, double>();
 
                 for (int i = 0; i < cozSnapshot.LatencyTags.Count; i++)
                 {
                     var latencyTag = cozSnapshot.LatencyTags[i];
-                    latencyPercentageSpeedups[latencyTag] =
-                        1 - cozSnapshot.Latencies[i] / baselineSummary.CozLatencies[latencyTag];
+                    latencyPercentageSpeedups[latencyTag] = (cozSnapshot.Latencies[i] - baselineSummary.CozLatencies[latencyTag])/baselineSummary.CozLatencies[latencyTag];
                 }
 
                 for (int i = 0; i < cozSnapshot.ThroughputTags.Count; i++)
                 {
                     var throughputTag = cozSnapshot.ThroughputTags[i];
-                    throughputPercentageSpeedups[throughputTag] =
-                        1 - cozSnapshot.Throughputs[i] / baselineSummary.CozThrougputs[throughputTag];
+                    throughputPercentageSpeedups[throughputTag] = (cozSnapshot.Throughputs[i]- baselineSummary.CozThrougputs[throughputTag])/baselineSummary.CozThrougputs[throughputTag];
                 }
 
                 var methodSpeedup = new MethodSpeedup

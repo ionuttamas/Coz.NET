@@ -23,7 +23,7 @@ namespace SampleApp.Latency
             thread2.Join();
 
             Console.WriteLine("Final processing");
-            Thread.Sleep(1000);
+            Thread.Sleep(100);
 
             CozMarker.EndLatency("MainProcess");
         }

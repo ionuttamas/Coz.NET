@@ -9,5 +9,6 @@ namespace Coz.NET.Profiler.Analysis
         public List<float> PercentageSpeedups { get; set; }
         public string ExecutablePath { get; set; }
         public string Arguments { get; set; }
+        public List<string> ExcludedMethodIds { get; set; }
     }
 }

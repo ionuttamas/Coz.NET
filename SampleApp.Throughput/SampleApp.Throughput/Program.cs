@@ -21,7 +21,7 @@ namespace SampleApp.Throughput
             thread2.Join();
 
             Console.WriteLine("Final processing");
-            Thread.Sleep(1000);
+            Thread.Sleep(100);
 
             CozMarker.Throughput("MainProcess");
         }

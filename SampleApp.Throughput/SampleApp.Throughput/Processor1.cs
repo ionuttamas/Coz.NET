@@ -13,17 +13,17 @@ namespace SampleApp.Throughput
 
         private void Step1()
         {
-            Thread.Sleep(1000);
+            Thread.Sleep(100);
         }
 
         private void Step2()
         {
-            Thread.Sleep(2000);
+            Thread.Sleep(200);
         }
 
         private void Step3()
         {
-            Thread.Sleep(3000);
+            Thread.Sleep(300);
         }
     }
 }

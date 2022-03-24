@@ -50,7 +50,7 @@ namespace Coz.NET.Profiler.Marker
         public static void StartLatency(string tag)
         {
             var latency = new LatencyMeasurement();
-            latency.Start();
+            latency.Resume();
 
             if (tag.Any(x => !char.IsLetterOrDigit(x)))
                 throw new ArgumentException($"Specified tag: [{tag}] must contain only letters or digits");
@@ -76,7 +76,7 @@ namespace Coz.NET.Profiler.Marker
             if (!Latencies.TryRemove(tag, out LatencyMeasurement latency))
                 throw new ArgumentException($"Could not complete latency processing for tag: [{tag}]");
 
-            latency.Stop();
+            latency.Finish();
             ProcessedLatencies.Add((tag, latency));
         }
 
@@ -89,13 +89,17 @@ namespace Coz.NET.Profiler.Marker
 
         public static (List<string>, List<long>) GetLatenciesSnapshot()
         {
-            var snapshot = ProcessedLatencies.ToArray().Where(x => x.Item2.IsFinished).ToList();
+            var snapshot = ProcessedLatencies.ToArray().Where(x => x.Item2.Completed).ToList();
 
             return (snapshot.Select(x => x.Item1).ToList(), snapshot.Select(x => x.Item2.Duration).ToList());
         }
 
         private static void OnExited(object sender, EventArgs e)
         {
+            //We don't send coz snapshot info in case of baseline experiments as these will be sent by ProfileMarker 
+            if(Experiment.IsBaseline)
+                return;
+
             var (throughputTags, throughputs) = GetThroughputSnapshot();
             var (latencyTags, latencies) = GetLatenciesSnapshot();
             var snapshot = new CozSnapshot

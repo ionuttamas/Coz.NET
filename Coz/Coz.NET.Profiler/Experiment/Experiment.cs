@@ -7,15 +7,7 @@ namespace Coz.NET.Profiler.Experiment
     [ProtoContract]
     public class Experiment : IProtoSerializable
     {
-        public Experiment() { }
-
-        public Experiment(string id, string methodId, int methodSlowdown)
-        {
-            Id = id;
-            //At the moment we only have millisecond thread sleep granularity
-            MethodId = methodId;
-            MethodSlowdown = methodSlowdown;
-        }
+        public Experiment() { } 
 
         [ProtoMember(1)]
         public string Id { get; set; }
@@ -28,6 +20,8 @@ namespace Coz.NET.Profiler.Experiment
 
         [ProtoMember(4)]
         public int MethodSlowdown { get; set; }
+
+        public bool IsBaseline => MethodSlowdown == 0;
 
         public byte[] Serialize()
         {
@@ -48,6 +42,11 @@ namespace Coz.NET.Profiler.Experiment
             Id = instance.Id;
             MethodId = instance.MethodId;
             MethodSlowdown = instance.MethodSlowdown;
+        }
+
+        public override string ToString()
+        {
+            return $"[Id: {Id}] - [MethodId: {MethodId}] - [MethodPercentageSlowdown: {MethodPercentageSlowdown}] - [MethodSlowdown: {MethodSlowdown}]";
         }
     }
 }

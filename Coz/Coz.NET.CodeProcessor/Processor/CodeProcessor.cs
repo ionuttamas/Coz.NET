@@ -1,4 +1,5 @@
-﻿using System.IO; 
+﻿using System.IO;
+using System.Linq;
 using Coz.NET.CodeProcessor.Rewriter;
 using Coz.NET.Profiler.Profile;
 using Microsoft.Build.Locator;
@@ -19,8 +20,13 @@ namespace Coz.NET.CodeProcessor.Processor
 
             var workspace = MSBuildWorkspace.Create();
             CopyFilesRecursively(codeLocation.SolutionFolder, codeLocation.GeneratedSolutionFolder);
-            var rewriter = new MethodVirtualSpeedupRewriter();
             var solution = workspace.OpenSolutionAsync(codeLocation.GeneratedSolutionPath).Result;
+            var compilations = solution.GetProjectDependencyGraph().GetTopologicallySortedProjects()
+                .Select(x => solution.GetProject(x))
+                .Where(x => x.SupportsCompilation)
+                .Select(x => x.GetCompilationAsync().Result)
+                .ToList();
+            var rewriter = new MethodVirtualSpeedupRewriter(compilations);
 
             foreach (ProjectId projectId in solution.GetProjectDependencyGraph().GetTopologicallySortedProjects())
             {

@@ -1,15 +1,29 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Threading;
 using Coz.NET.Profiler.IPC;
 using Coz.NET.Profiler.Marker;
+using static System.AppDomain;
 
 namespace Coz.NET.Profiler.Profile
 {
     public static class ProfileMarker
     {
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        static extern IntPtr OpenThread(uint dwDesiredAccess, bool bInheritHandle, uint dwThreadId);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern int SuspendThread(IntPtr hThread);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        static extern uint ResumeThread(IntPtr hThread);
+
         private static long currentCallId;
         private static readonly Experiment.Experiment Experiment;
         private static readonly ConcurrentDictionary<string, LatencyMeasurement> MethodLatencies;
@@ -25,7 +39,7 @@ namespace Coz.NET.Profiler.Profile
             IpcService = new IPCService();
             IpcService.Start();
             Experiment = IpcService.Receive<Experiment.Experiment>(); 
-            AppDomain.CurrentDomain.ProcessExit += OnExited;
+            CurrentDomain.ProcessExit += OnExited;
         }
          
         public static void Slowdown([CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
@@ -34,11 +48,44 @@ namespace Coz.NET.Profiler.Profile
 
             if (methodId!=Experiment.MethodId)
                 return;
-             
-            Thread.Sleep(Experiment.MethodSlowdown);
+
+            ProcessThreadCollection threads = Process.GetCurrentProcess().Threads;
+            var currentThreadId = GetCurrentThreadId();
+            var suspendedThreadHandles = new List<IntPtr>();
+
+            System.Timers.Timer timer = new System.Timers.Timer
+            {
+                Interval = Experiment.MethodSlowdown
+            };
+            timer.Elapsed += (sender, args) =>
+            {
+                foreach (IntPtr threadHandle in suspendedThreadHandles)
+                {
+                    ResumeThread(threadHandle);
+                }
+            };
+
+            for (int i = 0; i < threads.Count; i++)
+            {
+                ProcessThread processThread = threads[i];
+                var threadId = processThread.Id;
+
+                if (threadId != currentThreadId)
+                {
+                    IntPtr threadHandle = OpenThread(2, false, (uint)threadId);
+                    suspendedThreadHandles.Add(threadHandle);
+                }
+            }
+
+            foreach (var threadHandle in suspendedThreadHandles)
+            {
+                SuspendThread(threadHandle);
+            }
+
+            timer.Enabled = true;
         }
 
-        public static long StartRecord([CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
+        public static long Start([CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
         {
             if (currentCallId == long.MaxValue)
                 throw new InvalidOperationException("Too may method calls were recorded for this experiment.");
@@ -46,9 +93,8 @@ namespace Coz.NET.Profiler.Profile
             var snapshotCallId = currentCallId;
             var method = $"{callerFilePath}:{callerMember}:{currentCallId}"; //TODO: need to get unique identifier per caller :{callerLineNumber}
             Interlocked.Increment(ref currentCallId);
-
             var latency = new LatencyMeasurement();
-            latency.Start();
+            latency.Resume();
 
             if (!MethodLatencies.TryAdd(method, latency))
                 throw new InvalidOperationException($"Could not start the latency measurement for method: [{method}]");
@@ -56,21 +102,47 @@ namespace Coz.NET.Profiler.Profile
             return snapshotCallId;
         }
 
-        public static void EndRecord(long startedCallId, [CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
+        public static void End(long callId, [CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
         {
-            var augmentedMethodId = $"{callerFilePath}:{callerMember}:{startedCallId}";//TODO: need to get unique identifier per caller :{callerLineNumber}
+            var augmentedMethodId = $"{callerFilePath}:{callerMember}:{callId}";//TODO: need to get unique identifier per caller :{callerLineNumber}
 
             if (!MethodLatencies.TryRemove(augmentedMethodId, out LatencyMeasurement latency))
                 throw new ArgumentException($"Could not end latency measurement for method: [{augmentedMethodId}]");
 
-            latency.Stop();
+            latency.Finish();
             ProcessedLatencies.Add((augmentedMethodId, latency));
+        }
+
+        public static void Resume(long callId, [CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
+        {
+            var augmentedMethodId = $"{callerFilePath}:{callerMember}:{callId}";//TODO: need to get unique identifier per caller :{callerLineNumber}
+
+            if (!MethodLatencies.TryGetValue(augmentedMethodId, out LatencyMeasurement latency))
+                throw new ArgumentException($"Could not resume latency measurement for method: [{augmentedMethodId}]");
+
+            if(latency.Completed)
+                throw new ArgumentException($"Could not resume a completed latency measurement for method: [{augmentedMethodId}]");
+
+            latency.Resume();
+        }
+
+        public static void Pause(long callId, [CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
+        {
+            var augmentedMethodId = $"{callerFilePath}:{callerMember}:{callId}";//TODO: need to get unique identifier per caller :{callerLineNumber}
+
+            if (!MethodLatencies.TryGetValue(augmentedMethodId, out LatencyMeasurement latency))
+                throw new ArgumentException($"Could not pause latency measurement for method: [{augmentedMethodId}]");
+
+            if (latency.Completed)
+                throw new ArgumentException($"Could not pause a completed latency measurement for method: [{augmentedMethodId}]");
+
+            latency.Pause();
         }
 
         private static void OnExited(object sender, EventArgs e)
         {
-            var (throughputTags, throughputs) = Marker.CozMarker.GetThroughputSnapshot();
-            var (latencyTags, latencies) = Marker.CozMarker.GetLatenciesSnapshot();
+            var (throughputTags, throughputs) = CozMarker.GetThroughputSnapshot();
+            var (latencyTags, latencies) = CozMarker.GetLatenciesSnapshot();
             var snapshot = new CozSnapshot
             {
                 ExperimentId = Experiment.Id,
