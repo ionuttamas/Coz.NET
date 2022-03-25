@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text;
 using Coz.NET.Profiler.IPC;
 using Coz.NET.Profiler.Marker;
 using Coz.NET.Profiler.Profile;

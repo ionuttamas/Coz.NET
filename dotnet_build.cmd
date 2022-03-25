@@ -1,1 +1,1 @@
-dotnet build "C:\Users\tamas\Documents\Coz.NET\Temp_SampleApp.Latency\SampleApp.Latency.sln" /p:Configuration=Release
+dotnet build "C:\Users\tamas\Documents\Coz.NET\Temp_SampleApp.Latency2\SampleApp.Latency.sln" /p:Configuration=Release

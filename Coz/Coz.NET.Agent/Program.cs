@@ -13,7 +13,7 @@ namespace Coz.NET.Agent
         static void Main(string[] args)
         {
             var codeProcessor = new CodeProcessor.Processor.CodeProcessor();
-            var solutionFolder = @"C:\Users\tamas\Documents\Coz.NET\SampleApp.Latency";
+            var solutionFolder =          @"C:\Users\tamas\Documents\Coz.NET\SampleApp.Latency";
             var generatedSolutionFolder = @"C:\Users\tamas\Documents\Coz.NET\Temp_SampleApp.Latency";
             var solutionFilename = @"SampleApp.Latency.sln";
             var excludedMethodIds = new List<string> {$@"{generatedSolutionFolder}\SampleApp.Latency\Program.cs:Main" };
@@ -24,8 +24,8 @@ namespace Coz.NET.Agent
                 GeneratedSolutionFolder = generatedSolutionFolder,
                 SolutionFilename = solutionFilename
             };
-            codeProcessor.RegenerateSolution(codeLocation);
-            codeProcessor.BuildProjects(codeLocation);
+            //codeProcessor.RegenerateSolution(codeLocation);
+            //codeProcessor.BuildProjects(codeLocation);
             var arguments = string.Join(string.Empty, args.Skip(1));
             var config = new AnalysisConfig
             {
@@ -34,7 +34,7 @@ namespace Coz.NET.Agent
                 ExecutablePath = executablePath,
                 Arguments = arguments,
                 ExcludedMethodIds = excludedMethodIds,
-                PercentageSpeedups = new List<float>{0.9f} //Enumerable.Range(1, 9).Select(x=>1f*x/10).ToList()
+                PercentageSpeedups = Enumerable.Range(1, 9).Select(x=>1f*x/10).ToList()
             };
             var engine = new AnalysisEngine();
             engine.Start();

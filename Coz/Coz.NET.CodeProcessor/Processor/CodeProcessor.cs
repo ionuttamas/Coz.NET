@@ -44,8 +44,6 @@ namespace Coz.NET.CodeProcessor.Processor
                     File.WriteAllText(document.FilePath, text);
                 }
             }
-
-            MSBuildLocator.Unregister();
         }
 
         public void BuildProjects(CodeLocation codeLocation)
