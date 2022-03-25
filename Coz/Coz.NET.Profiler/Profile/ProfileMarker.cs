@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -15,19 +14,33 @@ namespace Coz.NET.Profiler.Profile
 {
     public static class ProfileMarker
     {
+        [DllImport("Kernel32", EntryPoint = "GetCurrentThreadId", ExactSpelling = true)]
+        public static extern Int32 GetCurrentWin32ThreadId();
+
         [DllImport("kernel32.dll")]
         static extern IntPtr OpenThread(uint dwDesiredAccess, bool bInheritHandle, uint dwThreadId);
+
+        [DllImport("kernel32")]
+        private static extern IntPtr CreateThread(IntPtr lpThreadAttributes, IntPtr dwStackSize, Delegate lpStartAddress, IntPtr lpParameter, int dwCreationFlags, out int lpThreadId);
+
+        [DllImport("kernel32")]
+        private static extern bool TerminateThread(IntPtr hThread, int dwExitCode);
+
+        [DllImport("kernel32.dll")]
+        private static extern bool CloseHandle(IntPtr handle);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         static extern int SuspendThread(IntPtr hThread);
 
         [DllImport("kernel32.dll", SetLastError = true)]
         static extern uint ResumeThread(IntPtr hThread);
-
+        
         private static long currentCallId;
         private static readonly Experiment.Experiment Experiment;
         private static readonly ConcurrentDictionary<string, LatencyMeasurement> MethodLatencies;
         private static readonly ConcurrentBag<(string, LatencyMeasurement)> ProcessedLatencies;
+        private static readonly Queue<(DateTime, List<IntPtr>)> SuspendedThreads; //TODO: Coarse DateTime granularity
+        private static readonly IntPtr ResumeThreadsHandle;
         private static long methodCalls;
         private static readonly IPCService IpcService;
 
@@ -35,13 +48,43 @@ namespace Coz.NET.Profiler.Profile
         {
             MethodLatencies = new ConcurrentDictionary<string, LatencyMeasurement>();
             ProcessedLatencies = new ConcurrentBag<(string, LatencyMeasurement)>();
+            SuspendedThreads = new Queue<(DateTime, List<IntPtr>)>();
             methodCalls = 0;
             currentCallId = long.MinValue;
-
             IpcService = new IPCService();
             IpcService.Start();
             Experiment = IpcService.Receive<Experiment.Experiment>(); 
             CurrentDomain.ProcessExit += OnExited;
+
+            Action resumeThreads = () =>
+            {
+                while (true)
+                {
+                    if (SuspendedThreads.Count == 0)
+                        Thread.Sleep(1);
+
+                    lock (Experiment)
+                    {
+                        if (SuspendedThreads.Count <= 0) 
+                            continue;
+                        
+                        var (resumeTime, suspendedHandles) = SuspendedThreads.Peek();
+
+                        if (DateTime.UtcNow < resumeTime) 
+                            continue;
+                            
+                        SuspendedThreads.Dequeue();
+
+                        foreach (IntPtr handle in suspendedHandles)
+                        {
+                            //Console.WriteLine($"Resuming {handle}");
+                            ResumeThread(handle);
+                            CloseHandle(handle);
+                        }
+                    }
+                }
+            };
+            ResumeThreadsHandle = StartNativeThread(resumeThreads);
         }
          
         public static void Slowdown([CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
@@ -51,41 +94,38 @@ namespace Coz.NET.Profiler.Profile
             if (methodId!=Experiment.MethodId)
                 return;
 
+            if(Experiment.IsBaseline)
+                return;
+
             ProcessThreadCollection threads = Process.GetCurrentProcess().Threads;
-            var currentThreadId = GetCurrentThreadId();
-            var suspendedThreadHandles = new List<IntPtr>();
+            var currentThreadId = GetCurrentWin32ThreadId();
+            var handles = new List<IntPtr>();
 
-            System.Timers.Timer timer = new System.Timers.Timer
+            lock (Experiment)
             {
-                Interval = Experiment.MethodSlowdown
-            };
-            timer.Elapsed += (sender, args) =>
-            {
-                foreach (IntPtr handle in suspendedThreadHandles)
+                for (int i = 0; i < threads.Count; i++)
                 {
-                    ResumeThread(handle);
-                    Marshal.FreeHGlobal(handle);
-                }
-            };
+                    ProcessThread processThread = threads[i];
+                    var threadId = processThread.Id;
 
-            for (int i = 0; i < threads.Count; i++)
-            {
-                ProcessThread processThread = threads[i];
-                var threadId = processThread.Id;
-
-                if (threadId != currentThreadId)
-                {
+                    if (threadId == currentThreadId) 
+                        continue;
+                    
                     IntPtr threadHandle = OpenThread(2, false, (uint)threadId);
-                    suspendedThreadHandles.Add(threadHandle);
+
+                    if(threadHandle == ResumeThreadsHandle)
+                        continue;
+
+                    handles.Add(threadHandle);
+                }
+
+                SuspendedThreads.Enqueue((DateTime.UtcNow.AddMilliseconds(Experiment.MethodSlowdown), handles));
+
+                foreach (var handle in handles)
+                {
+                    SuspendThread(handle);
                 }
             }
-
-            foreach (var handle in suspendedThreadHandles)
-            {
-                SuspendThread(handle);
-            }
-
-            timer.Enabled = true;
 
             Interlocked.Increment(ref methodCalls);
         }
@@ -143,9 +183,18 @@ namespace Coz.NET.Profiler.Profile
 
             latency.Pause();
         }
-        
+
+        private static IntPtr StartNativeThread(Delegate @delegate)
+        {
+            IntPtr handle = CreateThread(IntPtr.Zero, IntPtr.Zero, @delegate, IntPtr.Zero, 0, out var threadId);
+            
+            return handle;
+        }
+
         private static void OnExited(object sender, EventArgs e)
         {
+            TerminateThread(ResumeThreadsHandle, 0);
+
             var (throughputTags, throughputs) = CozMarker.GetThroughputSnapshot();
             var (latencyTags, latencies) = CozMarker.GetLatenciesSnapshot();
             var snapshot = new CozSnapshot

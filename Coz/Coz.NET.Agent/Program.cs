@@ -19,7 +19,7 @@ namespace Coz.NET.Agent
                 GeneratedSolutionFolder = @"C:\Users\tamas\Documents\Coz.NET\Temp_SampleApp.Latency2",
                 SolutionFilename = @"SampleApp.Latency.sln"
             };
-            codeProcessor.RegenerateSolution(codeLocation); return;
+            //codeProcessor.RegenerateSolution(codeLocation); return;
             //codeProcessor.BuildProjects(codeLocation);
 
             var temp = @"C:\Users\tamas\Documents\Coz.NET\SampleApp.Latency\SampleApp.Latency\bin\Debug\netcoreapp3.1\SampleApp.Latency.exe";
