@@ -16,10 +16,10 @@ namespace Coz.NET.Agent
             var codeLocation = new CodeLocation
             {
                 SolutionFolder = @"C:\Users\tamas\Documents\Coz.NET\SampleApp.Latency",
-                GeneratedSolutionFolder = @"C:\Users\tamas\Documents\Coz.NET\Temp_SampleApp.Latency",
+                GeneratedSolutionFolder = @"C:\Users\tamas\Documents\Coz.NET\Temp_SampleApp.Latency2",
                 SolutionFilename = @"SampleApp.Latency.sln"
             };
-            //codeProcessor.RegenerateSolution(codeLocation); return;
+            codeProcessor.RegenerateSolution(codeLocation); return;
             //codeProcessor.BuildProjects(codeLocation);
 
             var temp = @"C:\Users\tamas\Documents\Coz.NET\SampleApp.Latency\SampleApp.Latency\bin\Debug\netcoreapp3.1\SampleApp.Latency.exe";
@@ -32,7 +32,7 @@ namespace Coz.NET.Agent
                 CutoffPercentage = 0.05f,
                 ExecutablePath = executablePath,
                 Arguments = arguments,
-                ExcludedMethodIds = new List<string> { @"C:\Users\tamas\Documents\Coz.NET\Temp_SampleApp.Latency\SampleApp.Latency\Program.cs:Main" },
+                ExcludedMethodIds = new List<string> { @"C:\Users\tamas\Documents\Coz.NET\Temp_SampleApp.Latency2\SampleApp.Latency\Program.cs:Main" },
                 PercentageSpeedups = Enumerable.Range(1, 9).Select(x=>1f*x/10).ToList()
             };
             var engine = new AnalysisEngine();

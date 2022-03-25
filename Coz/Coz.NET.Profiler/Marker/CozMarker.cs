@@ -23,7 +23,6 @@ namespace Coz.NET.Profiler.Marker
             IpcService = new IPCService();
             IpcService.Start();
             Experiment = IpcService.Receive<Experiment.Experiment>(); 
-            AppDomain.CurrentDomain.ProcessExit += OnExited;
         }
 
         public static void Throughput(string tag)
@@ -92,25 +91,6 @@ namespace Coz.NET.Profiler.Marker
             var snapshot = ProcessedLatencies.ToArray().Where(x => x.Item2.Completed).ToList();
 
             return (snapshot.Select(x => x.Item1).ToList(), snapshot.Select(x => x.Item2.Duration).ToList());
-        }
-
-        private static void OnExited(object sender, EventArgs e)
-        {
-            //We don't send coz snapshot info in case of baseline experiments as these will be sent by ProfileMarker 
-            if(Experiment.IsBaseline)
-                return;
-
-            var (throughputTags, throughputs) = GetThroughputSnapshot();
-            var (latencyTags, latencies) = GetLatenciesSnapshot();
-            var snapshot = new CozSnapshot
-            {
-                ExperimentId = Experiment.Id,
-                ThroughputTags = throughputTags,
-                Throughputs = throughputs,
-                LatencyTags = latencyTags,
-                Latencies = latencies,
-            };
-            IpcService.Send(snapshot);
         }
     }
 }

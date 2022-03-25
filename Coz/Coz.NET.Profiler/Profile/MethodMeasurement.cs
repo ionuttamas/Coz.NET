@@ -12,7 +12,7 @@ namespace Coz.NET.Profiler.Profile
         public string MethodId { get; set; }
 
         [ProtoMember(2)]
-        public List<long> Latencies { get; set; } 
+        public List<long> Latencies { get; set; }
 
         public byte[] Serialize()
         {

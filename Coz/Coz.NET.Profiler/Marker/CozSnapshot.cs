@@ -16,9 +16,6 @@ namespace Coz.NET.Profiler.Marker
             Throughputs = new List<double>();
         }
 
-        [ProtoMember(1)]
-        public string ExperimentId { get; set; }
-
         [ProtoMember(2)]
         public List<string> LatencyTags { get; set; }
 
@@ -47,7 +44,6 @@ namespace Coz.NET.Profiler.Marker
         public void Deserialize(Stream stream)
         {
             CozSnapshot instance = Serializer.DeserializeWithLengthPrefix<CozSnapshot>(stream, PrefixStyle.Fixed32);
-            ExperimentId = instance.ExperimentId;
             LatencyTags = instance.LatencyTags;
             Latencies = instance.Latencies;
             ThroughputTags = instance.ThroughputTags;

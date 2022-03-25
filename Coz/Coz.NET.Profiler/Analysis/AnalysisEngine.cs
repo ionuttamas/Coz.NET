@@ -34,8 +34,8 @@ namespace Coz.NET.Profiler.Analysis
             List<ProfileMeasurement> baselineMeasurements = ExecuteBaselineRuns(config);
             BaselineSummary baselineSummary = ComputeBaselineSummary(config, baselineMeasurements);
             List<Experiment.Experiment> experiments = ScheduleExperiments(config, baselineSummary);
-            List<CozSnapshot> cozSnapshots = ExecuteExperimentalRuns(config, experiments);
-            AnalysisReport report = GenerateReport(experiments, baselineSummary, cozSnapshots);
+            List<ProfileMeasurement> profileMeasurements = ExecuteExperimentalRuns(config, experiments);
+            AnalysisReport report = GenerateReport(experiments, baselineSummary, profileMeasurements);
 
             return report;
         }
@@ -71,7 +71,7 @@ namespace Coz.NET.Profiler.Analysis
                         continue;
 
                     var duration = baselineSummary.MethodsLatencies[methodId];
-                    var percentageSlowdown = percentageSpeedup / (1 - percentageSpeedup);
+                    var percentageSlowdown = percentageSpeedup; //weird isn't it?! :) 
                     var slowdown = (int)(percentageSlowdown * duration);
 
                     if (slowdown == 0)
@@ -94,9 +94,9 @@ namespace Coz.NET.Profiler.Analysis
             return experiments;
         }
 
-        private List<CozSnapshot> ExecuteExperimentalRuns(AnalysisConfig config, List<Experiment.Experiment> experiments)
+        private List<ProfileMeasurement> ExecuteExperimentalRuns(AnalysisConfig config, List<Experiment.Experiment> experiments)
         {
-            var cozSnapshots = new List<CozSnapshot>();
+            var profileMeasurements = new List<ProfileMeasurement>();
 
             foreach (var experiment in experiments)
             {
@@ -105,12 +105,12 @@ namespace Coz.NET.Profiler.Analysis
                 stopwatch.Start();
                 StartProcess(config.ExecutablePath, config.Arguments);
                 stopwatch.Stop();
-                var cozSnapshot = ipcService.Receive<CozSnapshot>();
-                cozSnapshot.Throughputs = cozSnapshot.Throughputs.Select(x => x / stopwatch.ElapsedMilliseconds).ToList();
-                cozSnapshots.Add(cozSnapshot);
+                var profileMeasurement = ipcService.Receive<ProfileMeasurement>();
+                profileMeasurement.CozSnapshot.Throughputs = profileMeasurement.CozSnapshot.Throughputs.Select(x => x / stopwatch.ElapsedMilliseconds).ToList();
+                profileMeasurements.Add(profileMeasurement);
             }
 
-            return cozSnapshots;
+            return profileMeasurements;
         }
 
         private BaselineSummary ComputeBaselineSummary(AnalysisConfig config, List<ProfileMeasurement> baselineMeasurements)
@@ -134,7 +134,6 @@ namespace Coz.NET.Profiler.Analysis
                 .SelectMany(x => x)
                 .GroupBy(x => x.Key)
                 .ToDictionary(x => x.Key, x => x.SelectMany(m => m.Value).Average()); 
-
             baselineSummary.MethodsLatencies = methodLatencies;
             baselineSummary.CozLatencies = cozLatencies;
             baselineSummary.CozThrougputs = cozThroughputs;
@@ -142,27 +141,29 @@ namespace Coz.NET.Profiler.Analysis
             return baselineSummary;
         }
 
-        private AnalysisReport GenerateReport(List<Experiment.Experiment> experiments, BaselineSummary baselineSummary, List<CozSnapshot> cozSnapshots)
+        private AnalysisReport GenerateReport(List<Experiment.Experiment> experiments, BaselineSummary baselineSummary, List<ProfileMeasurement> profileMeasurements)
         {
             var methodSpeedups = new List<MethodSpeedup>();
 
             foreach (Experiment.Experiment experiment in experiments)
             {
-                var cozSnapshot = cozSnapshots.First(x => x.ExperimentId == experiment.Id);
-                var methodPercentageSpeedup = experiment.MethodPercentageSlowdown/(1 + experiment.MethodPercentageSlowdown);
+                var profileMeasurement = profileMeasurements.First(x => x.ExperimentId == experiment.Id);
+                var cozSnapshot = profileMeasurement.CozSnapshot;
+                var methodPercentageSpeedup = experiment.MethodPercentageSlowdown;
                 var latencyPercentageSpeedups = new Dictionary<string, double>();
                 var throughputPercentageSpeedups = new Dictionary<string, double>();
 
                 for (int i = 0; i < cozSnapshot.LatencyTags.Count; i++)
                 {
-                    var latencyTag = cozSnapshot.LatencyTags[i];
-                    latencyPercentageSpeedups[latencyTag] = (cozSnapshot.Latencies[i] - baselineSummary.CozLatencies[latencyTag])/baselineSummary.CozLatencies[latencyTag];
+                    var tag = cozSnapshot.LatencyTags[i];
+                    latencyPercentageSpeedups[tag] = (baselineSummary.CozLatencies[tag] + profileMeasurement.Calls * experiment.MethodSlowdown - cozSnapshot.Latencies[i]) /baselineSummary.CozLatencies[tag];
                 }
 
                 for (int i = 0; i < cozSnapshot.ThroughputTags.Count; i++)
                 {
-                    var throughputTag = cozSnapshot.ThroughputTags[i];
-                    throughputPercentageSpeedups[throughputTag] = (cozSnapshot.Throughputs[i]- baselineSummary.CozThrougputs[throughputTag])/baselineSummary.CozThrougputs[throughputTag];
+                    var tag = cozSnapshot.ThroughputTags[i];
+                    //TODO: needs review
+                    throughputPercentageSpeedups[tag] = (cozSnapshot.Throughputs[i]- baselineSummary.CozThrougputs[tag]) / baselineSummary.CozThrougputs[tag];
                 }
 
                 var methodSpeedup = new MethodSpeedup

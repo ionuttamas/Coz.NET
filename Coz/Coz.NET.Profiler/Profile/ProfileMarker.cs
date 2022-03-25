@@ -15,7 +15,7 @@ namespace Coz.NET.Profiler.Profile
 {
     public static class ProfileMarker
     {
-        [System.Runtime.InteropServices.DllImport("kernel32.dll")]
+        [DllImport("kernel32.dll")]
         static extern IntPtr OpenThread(uint dwDesiredAccess, bool bInheritHandle, uint dwThreadId);
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -28,12 +28,14 @@ namespace Coz.NET.Profiler.Profile
         private static readonly Experiment.Experiment Experiment;
         private static readonly ConcurrentDictionary<string, LatencyMeasurement> MethodLatencies;
         private static readonly ConcurrentBag<(string, LatencyMeasurement)> ProcessedLatencies;
+        private static long methodCalls;
         private static readonly IPCService IpcService;
 
         static ProfileMarker()
         {
             MethodLatencies = new ConcurrentDictionary<string, LatencyMeasurement>();
             ProcessedLatencies = new ConcurrentBag<(string, LatencyMeasurement)>();
+            methodCalls = 0;
             currentCallId = long.MinValue;
 
             IpcService = new IPCService();
@@ -44,7 +46,7 @@ namespace Coz.NET.Profiler.Profile
          
         public static void Slowdown([CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
         {
-            var methodId = $"{callerFilePath}:{callerMember}:{callerLineNumber}";
+            var methodId = $"{callerFilePath}:{callerMember}"; //:{callerLineNumber}
 
             if (methodId!=Experiment.MethodId)
                 return;
@@ -59,9 +61,10 @@ namespace Coz.NET.Profiler.Profile
             };
             timer.Elapsed += (sender, args) =>
             {
-                foreach (IntPtr threadHandle in suspendedThreadHandles)
+                foreach (IntPtr handle in suspendedThreadHandles)
                 {
-                    ResumeThread(threadHandle);
+                    ResumeThread(handle);
+                    Marshal.FreeHGlobal(handle);
                 }
             };
 
@@ -77,12 +80,14 @@ namespace Coz.NET.Profiler.Profile
                 }
             }
 
-            foreach (var threadHandle in suspendedThreadHandles)
+            foreach (var handle in suspendedThreadHandles)
             {
-                SuspendThread(threadHandle);
+                SuspendThread(handle);
             }
 
             timer.Enabled = true;
+
+            Interlocked.Increment(ref methodCalls);
         }
 
         public static long Start([CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
@@ -138,14 +143,13 @@ namespace Coz.NET.Profiler.Profile
 
             latency.Pause();
         }
-
+        
         private static void OnExited(object sender, EventArgs e)
         {
             var (throughputTags, throughputs) = CozMarker.GetThroughputSnapshot();
             var (latencyTags, latencies) = CozMarker.GetLatenciesSnapshot();
             var snapshot = new CozSnapshot
             {
-                ExperimentId = Experiment.Id,
                 ThroughputTags = throughputTags,
                 Throughputs = throughputs,
                 LatencyTags = latencyTags,
@@ -163,7 +167,8 @@ namespace Coz.NET.Profiler.Profile
             var profileMeasurement = new ProfileMeasurement
             {
                 MethodMeasurements = methodMeasurements,
-                CozSnapshot = snapshot
+                CozSnapshot = snapshot,
+                Calls = methodCalls
             };
             IpcService.Send(profileMeasurement);
         }
