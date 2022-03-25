@@ -35,7 +35,6 @@ namespace Coz.NET.Profiler.Analysis
             BaselineSummary baselineSummary = ComputeBaselineSummary(config, baselineMeasurements);
             List<Experiment.Experiment> experiments = ScheduleExperiments(config, baselineSummary);
             List<ProfileMeasurement> profileMeasurements = ExecuteExperimentalRuns(config, experiments);
-            return null;
             AnalysisReport report = GenerateReport(experiments, baselineSummary, profileMeasurements);
 
             return report;
@@ -105,7 +104,6 @@ namespace Coz.NET.Profiler.Analysis
                 var stopwatch = new Stopwatch();
                 stopwatch.Start();
                 StartProcess(config.ExecutablePath, config.Arguments);
-                return null;
                 stopwatch.Stop();
                 var profileMeasurement = ipcService.Receive<ProfileMeasurement>();
                 profileMeasurement.CozSnapshot.Throughputs = profileMeasurement.CozSnapshot.Throughputs.Select(x => x / stopwatch.ElapsedMilliseconds).ToList();

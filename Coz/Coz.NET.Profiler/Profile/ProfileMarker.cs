@@ -40,8 +40,8 @@ namespace Coz.NET.Profiler.Profile
         private static readonly ConcurrentDictionary<string, LatencyMeasurement> MethodLatencies;
         private static readonly ConcurrentBag<(string, LatencyMeasurement)> ProcessedLatencies;
         private static readonly ConcurrentQueue<(DateTime, List<IntPtr>)> SuspendedThreads; //TODO: Coarse DateTime granularity
-        private static IntPtr ResumeHandle;
-        private static int ResumeThreadId;
+        private static readonly IntPtr ResumeHandle;
+        private static readonly int ResumeThreadId;
         private static long methodCalls;
         private static readonly IPCService IpcService;
 
@@ -59,46 +59,30 @@ namespace Coz.NET.Profiler.Profile
 
             Action resumeThreads = () =>
             {
-                Console.WriteLine($"Inside resumeThreads");
-
                 while (true)
                 {
-                    Console.WriteLine($"Heartbeat");
-
                     (DateTime, List<IntPtr>) tuple;
 
-                    if (SuspendedThreads.Count > 0)
-                    {
-                        Console.WriteLine($"Before try dequeue {SuspendedThreads.Count}");
-                    }
-                    
                     while (!SuspendedThreads.TryDequeue(out tuple))
                     {
-                        Console.WriteLine($"Tryin' to dequeue failed");
-                        Thread.Sleep(2);
+                        Thread.Sleep(1);
                     }
 
-                    Console.WriteLine($"SuspendedThreads.TryDequeue worked");
                     var sleepTimespan = (int)(tuple.Item1 - DateTime.UtcNow).TotalMilliseconds;
 
                     if (sleepTimespan > 0)
                     {
-                        Console.WriteLine($"Sleeping for {sleepTimespan}");
                         Thread.Sleep(sleepTimespan);
                     }
 
-                    Console.WriteLine($"Found handles to resume");
-
                     foreach (IntPtr handle in tuple.Item2)
                     {
-                        Console.WriteLine($"Resuming {handle}");
                         ResumeThread(handle);
-                        //CloseHandle(handle);
+                        CloseHandle(handle);
                     }
                 }
             };
             (ResumeHandle, ResumeThreadId) = StartNativeThread(resumeThreads);
-            Console.WriteLine($"ResumeThreadsHandle {ResumeHandle}");
         }
 
         public static void Slowdown([CallerFilePath] string callerFilePath = "", [CallerMemberName] string callerMember = "", [CallerLineNumber] long callerLineNumber = 0)
@@ -111,7 +95,6 @@ namespace Coz.NET.Profiler.Profile
             if(Experiment.IsBaseline)
                 return;
 
-            Console.WriteLine($"Inside {methodId} with experiment: {Experiment}");
             ProcessThreadCollection threads = Process.GetCurrentProcess().Threads;
             var currentThreadId = GetCurrentWin32ThreadId();
             var handles = new List<IntPtr>();
@@ -123,28 +106,17 @@ namespace Coz.NET.Profiler.Profile
                     ProcessThread processThread = threads[i];
                     var threadId = processThread.Id;
 
-                    if (threadId == currentThreadId) 
+                    if (threadId == currentThreadId || threadId == ResumeThreadId) 
                         continue;
                     
-                    IntPtr threadHandle = OpenThread(2, true, (uint)threadId);
-
-                    if (threadHandle == ResumeHandle || threadId == ResumeThreadId)
-                    {
-                        Console.WriteLine($"Ignored resume handle = {threadHandle} and threadId={threadId}");
-                        continue;
-                    }
-
-                    handles.Add(threadHandle);
-                    Console.WriteLine($"Added {threadId}");
+                    IntPtr handle = OpenThread(2, true, (uint)threadId);
+                    handles.Add(handle);
                 }
 
-                Console.WriteLine($"Enqueuing into: SuspendedThreads.Count = {SuspendedThreads.Count}");
                 SuspendedThreads.Enqueue((DateTime.UtcNow.AddMilliseconds(Experiment.MethodSlowdown), handles));
-                Console.WriteLine($"Enqueued into: SuspendedThreads.Count = {SuspendedThreads.Count}");
 
                 foreach (var handle in handles)
                 {
-                    Console.WriteLine($"Suspending {handle}");
                     SuspendThread(handle);
                 }
             }
@@ -209,7 +181,6 @@ namespace Coz.NET.Profiler.Profile
         private static (IntPtr, int) StartNativeThread(Delegate @delegate)
         {
             IntPtr handle = CreateThread(IntPtr.Zero, IntPtr.Zero, @delegate, IntPtr.Zero, 0, out var threadId);
-            Console.WriteLine($"Started handle = {handle} and threadId={threadId}");
 
             return (handle, threadId);
         }
@@ -217,7 +188,6 @@ namespace Coz.NET.Profiler.Profile
         private static void OnExited(object sender, EventArgs e)
         {
             TerminateThread(ResumeHandle, 0);
-
             var (throughputTags, throughputs) = CozMarker.GetThroughputSnapshot();
             var (latencyTags, latencies) = CozMarker.GetLatenciesSnapshot();
             var snapshot = new CozSnapshot
@@ -238,6 +208,7 @@ namespace Coz.NET.Profiler.Profile
                 .ToList();
             var profileMeasurement = new ProfileMeasurement
             {
+                ExperimentId = Experiment.Id,
                 MethodMeasurements = methodMeasurements,
                 CozSnapshot = snapshot,
                 Calls = methodCalls
