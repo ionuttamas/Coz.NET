@@ -7,6 +7,7 @@ using System.Text;
 using Coz.NET.Profiler.IPC;
 using Coz.NET.Profiler.Marker;
 using Coz.NET.Profiler.Profile;
+using Coz.NET.Profiler.Utils;
 
 namespace Coz.NET.Profiler.Analysis
 {
@@ -51,7 +52,7 @@ namespace Coz.NET.Profiler.Analysis
                     Id = Guid.NewGuid().ToString()
                 };
                 ipcService.Send(experiment); 
-                StartProcess(config.ExecutablePath, config.Arguments);
+                ProcessUtils.StartProcess(config.ExecutablePath, config.Arguments, Path.GetDirectoryName(config.ExecutablePath));
                 var profileMeasurement = ipcService.Receive<ProfileMeasurement>();
                 baselineMeasurements.Add(profileMeasurement);
             }
@@ -76,7 +77,7 @@ namespace Coz.NET.Profiler.Analysis
 
                     if (slowdown == 0)
                     {
-                        Console.WriteLine($"WARN: Experiment for [methodId: {methodId}] was dropped");
+                        Console.WriteLine($"INFO: Experiment for [methodId: {methodId}] was dropped");
                         continue;
                     }
 
@@ -103,7 +104,7 @@ namespace Coz.NET.Profiler.Analysis
                 ipcService.Send(experiment);
                 var stopwatch = new Stopwatch();
                 stopwatch.Start();
-                StartProcess(config.ExecutablePath, config.Arguments);
+                ProcessUtils.StartProcess(config.ExecutablePath, config.Arguments, Path.GetDirectoryName(config.ExecutablePath));
                 stopwatch.Stop();
                 var profileMeasurement = ipcService.Receive<ProfileMeasurement>();
                 profileMeasurement.CozSnapshot.Throughputs = profileMeasurement.CozSnapshot.Throughputs.Select(x => x / stopwatch.ElapsedMilliseconds).ToList();
@@ -200,25 +201,7 @@ namespace Coz.NET.Profiler.Analysis
 
             return throughputs;
         }
-
-        private static void StartProcess(string executablePath, string arguments)
-        {
-            var process = new Process
-            {
-                StartInfo =
-                {
-                    WorkingDirectory = Path.GetDirectoryName(executablePath),
-                    FileName = executablePath,
-                    Arguments = arguments,
-                    RedirectStandardOutput = false,
-                    UseShellExecute = true,
-                    CreateNoWindow = true
-                }
-            };
-            process.Start();
-            process.WaitForExit();
-        } 
-
+        
         private class BaselineSummary
         {
             public Dictionary<string, double> MethodsLatencies { get; set; }

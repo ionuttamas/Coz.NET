@@ -22,8 +22,8 @@ namespace SampleApp.Latency
             thread1.Join();
             thread2.Join();
 
-            Console.WriteLine("Final processing");
             Thread.Sleep(100);
+            Console.WriteLine("Completed: Program/Main");
 
             CozMarker.EndLatency("MainProcess");
         }

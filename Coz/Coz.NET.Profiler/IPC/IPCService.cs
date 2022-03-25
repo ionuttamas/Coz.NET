@@ -1,59 +1,34 @@
-﻿using System;
-using System.IO;
-using System.IO.MemoryMappedFiles;
+﻿using System.IO;
 using Coz.NET.Profiler.Experiment;
 
 namespace Coz.NET.Profiler.IPC
 {
     public class IPCService
     {
-        private const long MAX_MESSAGE_CAPACITY = 1000000;
-        private const string MEMORY_MAPPED_FILE = "COZ_MMF";
-        private MemoryMappedFile channel;
+        private const string SHARED_FILE = @"C:\Users\tamas\Documents\Coz.NET\data.txt";
 
         public void Start()
         {
-            //channel = MemoryMappedFile.CreateOrOpen(MEMORY_MAPPED_FILE, MAX_MESSAGE_CAPACITY);
         }
 
         public void Stop()
         {
-            //channel.Dispose();
         }
 
         public void Send<T>(T message) where T : IProtoSerializable, new()
         {
             var data = message.Serialize();
-            File.WriteAllBytes(@"C:\Users\tamas\Documents\Coz.NET\data.txt", data);
-
-            //using (var stream = channel.CreateViewStream())
-            //{
-            //    var data = message.Serialize();
-            //
-            //    if (data.Length > MAX_MESSAGE_CAPACITY)
-            //        throw new InvalidOperationException(
-            //            $"Transmitted message {message} exceeds limit of {MAX_MESSAGE_CAPACITY} bytes");
-            //
-            //    stream.Seek(0, SeekOrigin.Begin);
-            //    stream.Write(data);
-            //    stream.Flush();
-            //}
+            File.WriteAllBytes(SHARED_FILE, data);
         }
 
         public T Receive<T>() where T : IProtoSerializable, new()
         {
             var instance = new T();
 
-            using (var stream = new FileStream(@"C:\Users\tamas\Documents\Coz.NET\data.txt", FileMode.Open))
+            using (var stream = new FileStream(SHARED_FILE, FileMode.Open))
             {
                 instance.Deserialize(stream);
             }
-
-            //using (var stream = channel.CreateViewStream())
-            //{
-            //    instance.Deserialize(stream);
-            //    stream.Seek(0, SeekOrigin.Begin);
-            //}
 
             return instance;
         }

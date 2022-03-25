@@ -71,6 +71,7 @@ namespace Coz.NET.CodeProcessor.Rewriter
 
             var methodName = ((IdentifierNameSyntax)invocationExpression.Expression).Identifier.ValueText;
 
+            //TODO: this is a rudimentary symbol check
             if (!compilations.Any(x => x.ContainsSymbolsWithName(methodName, SymbolFilter.Member)))
                 return base.VisitExpressionStatement(node);
 

@@ -1,0 +1,1 @@
+dotnet build "C:\Users\tamas\Documents\Coz.NET\Temp_SampleApp.Latency\SampleApp.Latency.sln" /p:Configuration=Release

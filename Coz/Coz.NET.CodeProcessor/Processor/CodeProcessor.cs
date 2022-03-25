@@ -1,7 +1,7 @@
 ﻿using System.IO;
 using System.Linq;
 using Coz.NET.CodeProcessor.Rewriter;
-using Coz.NET.Profiler.Profile;
+using Coz.NET.Profiler.Utils;
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis; 
 using Microsoft.CodeAnalysis.Formatting;
@@ -44,29 +44,14 @@ namespace Coz.NET.CodeProcessor.Processor
                     File.WriteAllText(document.FilePath, text);
                 }
             }
+
+            MSBuildLocator.Unregister();
         }
 
         public void BuildProjects(CodeLocation codeLocation)
         {
-            if (!MSBuildLocator.IsRegistered)
-            {
-                MSBuildLocator.RegisterDefaults();
-            }
-
-            var workspace = MSBuildWorkspace.Create(); 
-            var solution = workspace.OpenSolutionAsync(codeLocation.GeneratedSolutionPath).Result;
-
-            foreach (ProjectId projectId in solution.GetProjectDependencyGraph().GetTopologicallySortedProjects())
-            {
-                var project = solution.GetProject(projectId);
-                
-                if(!project.SupportsCompilation)
-                    continue;
-
-                var compilation = project.GetCompilationAsync().Result;
-                compilation = compilation.AddReferences(MetadataReference.CreateFromFile(typeof(ProfileMarker).Assembly.Location));
-                compilation.Emit(project.CompilationOutputInfo.AssemblyPath.Replace(codeLocation.SolutionFolder, codeLocation.GeneratedSolutionFolder));
-            }
+            //TODO: not working
+            ProcessUtils.StartProcess("dotnet", $@"build ""{codeLocation.GeneratedSolutionPath}"" /p:Configuration=Release");
         }
 
         private static void CopyFilesRecursively(string sourcePath, string targetPath)

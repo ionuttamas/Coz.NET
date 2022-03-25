@@ -13,18 +13,19 @@ namespace Coz.NET.Agent
         static void Main(string[] args)
         {
             var codeProcessor = new CodeProcessor.Processor.CodeProcessor();
+            var solutionFolder = @"C:\Users\tamas\Documents\Coz.NET\SampleApp.Latency";
+            var generatedSolutionFolder = @"C:\Users\tamas\Documents\Coz.NET\Temp_SampleApp.Latency";
+            var solutionFilename = @"SampleApp.Latency.sln";
+            var excludedMethodIds = new List<string> {$@"{generatedSolutionFolder}\SampleApp.Latency\Program.cs:Main" };
+            var executablePath = $@"{generatedSolutionFolder}\SampleApp.Latency\bin\Release\netcoreapp3.1\SampleApp.Latency.exe";
             var codeLocation = new CodeLocation
             {
-                SolutionFolder = @"C:\Users\tamas\Documents\Coz.NET\SampleApp.Latency",
-                GeneratedSolutionFolder = @"C:\Users\tamas\Documents\Coz.NET\Temp_SampleApp.Latency2",
-                SolutionFilename = @"SampleApp.Latency.sln"
+                SolutionFolder = solutionFolder,
+                GeneratedSolutionFolder = generatedSolutionFolder,
+                SolutionFilename = solutionFilename
             };
-            //codeProcessor.RegenerateSolution(codeLocation); return;
-            //codeProcessor.BuildProjects(codeLocation);
-
-            var temp = @"C:\Users\tamas\Documents\Coz.NET\SampleApp.Latency\SampleApp.Latency\bin\Release\netcoreapp3.1\SampleApp.Latency.exe";
-            //TODO: this only works if the generated exe is within the solution folder
-            var executablePath = temp.Replace(codeLocation.SolutionFolder, codeLocation.GeneratedSolutionFolder);
+            codeProcessor.RegenerateSolution(codeLocation);
+            codeProcessor.BuildProjects(codeLocation);
             var arguments = string.Join(string.Empty, args.Skip(1));
             var config = new AnalysisConfig
             {
@@ -32,12 +33,13 @@ namespace Coz.NET.Agent
                 CutoffPercentage = 0.05f,
                 ExecutablePath = executablePath,
                 Arguments = arguments,
-                ExcludedMethodIds = new List<string> { @"C:\Users\tamas\Documents\Coz.NET\Temp_SampleApp.Latency2\SampleApp.Latency\Program.cs:Main" },
-                PercentageSpeedups = Enumerable.Range(1, 9).Select(x=>1f*x/10).ToList()
+                ExcludedMethodIds = excludedMethodIds,
+                PercentageSpeedups = new List<float>{0.9f} //Enumerable.Range(1, 9).Select(x=>1f*x/10).ToList()
             };
             var engine = new AnalysisEngine();
             engine.Start();
             var report = engine.Analyze(config);
+            engine.Stop();
             var json = JsonSerializer.Serialize(report);
             File.WriteAllText("Report.json", json); 
         }
