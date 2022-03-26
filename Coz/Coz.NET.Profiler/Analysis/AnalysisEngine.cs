@@ -208,6 +208,4 @@ namespace Coz.NET.Profiler.Analysis
             public Dictionary<string, double> CozThrougputs { get; set; }
         }
     }
-
-
 }

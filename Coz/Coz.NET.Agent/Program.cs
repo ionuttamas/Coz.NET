@@ -24,7 +24,7 @@ namespace Coz.NET.Agent
                 GeneratedSolutionFolder = generatedSolutionFolder,
                 SolutionFilename = solutionFilename
             };
-            //codeProcessor.RegenerateSolution(codeLocation);
+            //codeProcessor.RegenerateSolution(codeLocation); return;
             //codeProcessor.BuildProjects(codeLocation);
             var arguments = string.Join(string.Empty, args.Skip(1));
             var config = new AnalysisConfig

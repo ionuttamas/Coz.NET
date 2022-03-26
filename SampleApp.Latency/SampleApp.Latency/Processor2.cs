@@ -1,10 +1,11 @@
 ﻿using System;
-using System.Threading;
 
 namespace SampleApp
 {
     public class Processor2
     {
+        private const int PROCESSING_QUANTA = 1500000;
+
         public void Process()
         {
             Step1();
@@ -14,13 +15,25 @@ namespace SampleApp
 
         private void Step1()
         {
-            Thread.Sleep(400);
+            var sum = 0d;
+
+            for (int i = 0; i < 4 * PROCESSING_QUANTA; i++)
+            {
+                sum = (sum + Math.Pow(i, 1.1)) % 10;
+            }
+
             Console.WriteLine("Completed: Processor2/Step1");
         }
 
         private void Step2()
         {
-            Thread.Sleep(100);
+            var sum = 0d;
+
+            for (int i = 0; i < 3 * PROCESSING_QUANTA; i++)
+            {
+                sum = (sum + Math.Pow(i, 1.1)) % 10;
+            }
+
             Console.WriteLine("Completed: Processor2/Step2");
         }
     }
